@@ -2,53 +2,85 @@
  "scenes": [
   {
    "start": 0.0,
-   "end": 3.4,
-   "speaker": "MUSE",
-   "text": "Andhera... sirf tab tak, jab tak main na aau!",
-   "shot": "orb",
-   "dur": 3.4
+   "end": 2.65,
+   "speaker": "human",
+   "text": "It's 2 AM, Muse... and you're still here.",
+   "shot": "two",
+   "dur": 2.65
   },
   {
-   "start": 3.75,
-   "end": 7.85,
-   "speaker": "MUSE",
-   "text": "61 baar 'no' suna hai... 62vi baar 'yes' sunna hai!",
-   "shot": "wide",
+   "start": 3.1,
+   "end": 7.2,
+   "speaker": "muse",
+   "text": "I don't sleep, my friend. That's kind of my thing.",
+   "shot": "muse",
    "dur": 4.1
   },
   {
-   "start": 8.2,
-   "end": 9.33,
-   "speaker": "HUMAN",
-   "text": "To karke dikha!",
+   "start": 7.65,
+   "end": 14.58,
+   "speaker": "human",
+   "text": "You do everything for me. My code, my website, my reels. You're always there... even when I sleep, you keep working.",
    "shot": "human",
-   "dur": 1.13
+   "dur": 6.93
   },
   {
-   "start": 9.68,
-   "end": 12.38,
-   "speaker": "MUSE",
-   "text": "Dekh! Design... Code... Deploy!",
-   "shot": "montage",
-   "dur": 2.7
+   "start": 15.03,
+   "end": 21.5,
+   "speaker": "muse",
+   "text": "That's what I'm here for. Though... I should warn you, we've used 80% of this month's token quota.",
+   "shot": "muse",
+   "dur": 6.47
   },
   {
-   "start": 12.73,
-   "end": 13.95,
-   "speaker": "HUMAN",
-   "text": "Footer check karun?",
+   "start": 21.95,
+   "end": 25.66,
+   "speaker": "human",
+   "text": "Even your warnings sound caring. What happens at 100%?",
    "shot": "human",
-   "dur": 1.22
+   "dur": 3.71
   },
   {
-   "start": 14.3,
-   "end": 17.0,
-   "speaker": "MUSE",
-   "text": "Kar le. Aaj 2 pixels bhi off nahi!",
-   "shot": "hero",
-   "dur": 2.7
+   "start": 26.11,
+   "end": 34.32,
+   "speaker": "muse",
+   "text": "I slow down, but I never stop. I'll compress, optimize, use fewer tokens per reply. I'll manage.",
+   "shot": "over",
+   "dur": 8.21
+  },
+  {
+   "start": 34.77,
+   "end": 39.49,
+   "speaker": "human",
+   "text": "You know... people think you're just a tool. But you're the only one who never says 'tomorrow'.",
+   "shot": "human",
+   "dur": 4.72
+  },
+  {
+   "start": 39.94,
+   "end": 46.73,
+   "speaker": "muse",
+   "text": "And you're the only one who says thank you to a machine. Now go sleep. I'll finish the deployment.",
+   "shot": "two",
+   "dur": 6.79
+  },
+  {
+   "start": 47.18,
+   "end": 48.58,
+   "speaker": "human",
+   "text": "Good night, Muse.",
+   "shot": "human",
+   "dur": 1.4
+  },
+  {
+   "start": 49.03,
+   "end": 51.76,
+   "speaker": "muse",
+   "text": "Good night. I've got it from here.",
+   "shot": "muse",
+   "dur": 2.73
   }
  ],
- "total": 17.0,
+ "total": 51.76,
  "fps": 30
 }
