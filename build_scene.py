@@ -363,9 +363,13 @@ print("SCENE READY, frames:", NFRAMES)
 import time
 t0 = time.time()
 if os.environ.get("SAVE_BLEND"):
-    out = os.environ.get("BLEND_OUT", "/tmp/muse_scene.blend")
+    out = os.environ.get("BLEND_OUT") or os.path.join(os.getcwd(), "muse_scene.blend")
+    out = os.path.abspath(out)
+    print("Saving blend to:", out, "cwd:", os.getcwd(), flush=True)
     bpy.ops.wm.save_as_mainfile(filepath=out)
-    print("BLEND SAVED:", out)
+    if not os.path.exists(out):
+        raise RuntimeError(f"Blend save FAILED, not found at {out}")
+    print("BLEND SAVED:", out, f"({os.path.getsize(out)//1024} KB)")
 elif os.environ.get("TEST_FRAMES"):
     # smoke test: render 3 scattered frames only
     for tf in [5, NFRAMES // 2, NFRAMES - 10]:
