@@ -6,7 +6,11 @@ import bpy, os, sys
 argv = sys.argv[sys.argv.index("--") + 1:]
 start, end = int(argv[0]), int(argv[1])
 
-bpy.ops.wm.open_mainfile(filepath="muse_scene.blend")
+blend_path = os.path.abspath(os.path.join(os.getcwd(), "muse_scene.blend"))
+print("Opening blend:", blend_path, flush=True)
+if not os.path.exists(blend_path):
+    raise RuntimeError(f"Blend not found at {blend_path}")
+bpy.ops.wm.open_mainfile(filepath=blend_path)
 scene = bpy.context.scene
 os.makedirs("frames", exist_ok=True)
 for f in range(start, end + 1):
