@@ -1,58 +1,51 @@
-"""v3: full-3D Blender demo - fluffy Muse creature + orb + desk environment.
-Reads scenes.json + envelope.json. Renders PNG sequence headless (Cycles CPU)."""
-import bpy, json, math, os
+"""v5: emotional 1-min 3D short - proper human + improved Muse + real laptop.
+Reads scenes.json + envelope.json (script-relative). SAVE_BLEND / TEST_FRAMES supported."""
+import bpy, json, math, os, random
 
-BASE = os.path.dirname(os.path.abspath(__file__))  # script's own dir (works local + CI)
+BASE = os.path.dirname(os.path.abspath(__file__))
 print("BASE:", BASE, flush=True)
 SC = json.load(open(f"{BASE}/scenes.json"))
 SCENES, TOTAL, FPS = SC["scenes"], SC["total"], SC["fps"]
 ENV = json.load(open(f"{BASE}/envelope.json"))
 NFRAMES = int(TOTAL * FPS)
-FRAMES_DIR = f"{BASE}/frames3d"
+FRAMES_DIR = f"{BASE}/frames5"
 os.makedirs(FRAMES_DIR, exist_ok=True)
+random.seed(11)
 
-# ---------- clean ----------
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.object.delete()
 
-def mat(name, color, rough=0.6, emission=None, e_strength=0.0, subsurface=0.0):
+def mat(name, color, rough=0.6, emission=None, e_strength=0.0):
     m = bpy.data.materials.new(name)
     m.use_nodes = True
     b = m.node_tree.nodes["Principled BSDF"]
     b.inputs["Base Color"].default_value = (*color, 1.0)
     b.inputs["Roughness"].default_value = rough
-    if subsurface:
-        try:
-            b.inputs["Subsurface Weight"].default_value = subsurface
-        except KeyError:
-            pass
-        try:
-            b.inputs["Subsurface Color"].default_value = (*color, 1.0)
-        except KeyError:
-            pass
     if emission:
         b.inputs["Emission Color"].default_value = (*emission, 1.0)
         b.inputs["Emission Strength"].default_value = e_strength
     return m
 
-CREAM = mat("Cream", (0.92, 0.86, 0.76), 0.9)
-DARK = mat("Dark", (0.05, 0.06, 0.08), 0.15)
-WHITE = mat("White", (1, 1, 1), 0.3)
-PINK = mat("Pink", (1.0, 0.62, 0.62), 0.7)
-ORB_MAT = mat("Orb", (0.4, 0.3, 1.0), 0.2, emission=(0.55, 0.35, 1.0), e_strength=1.6)
-WOOD = mat("Wood", (0.35, 0.22, 0.12), 0.8)
-WALL_MAT = mat("Wall", (0.06, 0.09, 0.18), 0.95)
-HOODIE = mat("Hoodie", (0.12, 0.15, 0.24), 0.9)
-SKIN = mat("Skin", (0.85, 0.62, 0.45), 0.7)
-HAIR_MAT = mat("Hair", (0.1, 0.09, 0.12), 0.85)
-SCREEN_MAT = mat("Screen", (0.05, 0.1, 0.2), 0.4, emission=(0.2, 0.5, 0.9), e_strength=1.2)
+CREAM = mat("Cream", (0.93, 0.87, 0.77), 0.9)
+DARK = mat("Dark", (0.04, 0.05, 0.07), 0.15)
+WHITE = mat("White", (1, 1, 1), 0.25)
+PINK = mat("Pink", (1.0, 0.6, 0.6), 0.7)
+MOUTH_M = mat("MouthIn", (0.35, 0.08, 0.1), 0.6)
+ORB_MAT = mat("Orb", (0.4, 0.3, 1.0), 0.2, emission=(0.55, 0.35, 1.0), e_strength=1.2)
+WOOD = mat("Wood", (0.32, 0.2, 0.11), 0.8)
+WALL_MAT = mat("Wall", (0.05, 0.08, 0.16), 0.95)
+SKIN = mat("Skin", (0.87, 0.64, 0.47), 0.65)
+HAIR_MAT = mat("Hair", (0.12, 0.1, 0.1), 0.85)
+SHIRT = mat("Shirt", (0.16, 0.28, 0.42), 0.85)
+PANTS = mat("Pants", (0.1, 0.1, 0.14), 0.9)
+SCREEN_MAT = mat("Screen", (0.04, 0.09, 0.18), 0.4, emission=(0.25, 0.55, 1.0), e_strength=1.4)
 NIGHT_MAT = mat("Night", (0.03, 0.07, 0.18), 0.9, emission=(0.05, 0.12, 0.3), e_strength=0.8)
 PAPER = mat("Paper", (0.9, 0.88, 0.8), 0.9)
+MUG_M = mat("Mug", (0.7, 0.2, 0.15), 0.5)
 
 def prim(op, **kw):
     getattr(bpy.ops.mesh, op)(**kw)
     o = bpy.context.active_object
-    # smooth shading for organic shapes
     if o.type == 'MESH':
         for p in o.data.polygons:
             p.use_smooth = True
@@ -66,179 +59,212 @@ def key(obj, frame, loc=None, rot=None, scale=None):
     if scale is not None:
         obj.scale = scale; obj.keyframe_insert("scale", frame=frame)
 
-DESK_Z = 1.15  # desk top surface
+def s2f(s): return int(round(s * FPS))
 
-# ---------- MUSE rig ----------
-rig = bpy.data.objects.new("MuseRig", None)
-bpy.context.collection.objects.link(rig)
+DESK_Z = 1.02  # desk top
 
-def child(mesh_obj, loc, parent=rig):
-    mesh_obj.parent = parent
-    mesh_obj.location = loc
-    return mesh_obj
+# ================= MUSE (improved, faces -Y) =================
+muse = bpy.data.objects.new("MuseRig", None)
+bpy.context.collection.objects.link(muse)
+def mchild(o, loc):
+    o.parent = muse; o.location = loc; return o
 
-body = child(prim('primitive_uv_sphere_add', radius=1.0, segments=24, ring_count=16),
-             (0, 0, 1.25))
-body.scale = (1.0, 0.88, 1.12)
-body.data.materials.append(CREAM)
-head = child(prim('primitive_uv_sphere_add', radius=0.72, segments=24, ring_count=16),
-             (0, 0.18, 2.15))
-head.data.materials.append(CREAM)
-# eyes
-eyeL = child(prim('primitive_uv_sphere_add', radius=0.155, segments=16, ring_count=12),
-             (-0.3, -0.5, 2.32)); eyeL.data.materials.append(DARK)
-eyeR = child(prim('primitive_uv_sphere_add', radius=0.155, segments=16, ring_count=12),
-             (0.3, -0.5, 2.32)); eyeR.data.materials.append(DARK)
-for ex in (-0.3, 0.3):
-    hl = child(prim('primitive_uv_sphere_add', radius=0.05, segments=10, ring_count=8),
-               (ex + 0.06, -0.63, 2.4)); hl.data.materials.append(WHITE)
-# smile (talking mouth -> scale Y by envelope): bezier arc curve
-curve_data = bpy.data.curves.new("SmileCurve", type='CURVE')
-curve_data.dimensions = '3D'
-spline = curve_data.splines.new('BEZIER')
-spline.bezier_points.add(2)
-pts = [(-0.26, 0, 0), (0, -0.16, 0), (0.26, 0, 0)]
-for i, (px, py, pz) in enumerate(pts):
-    bp = spline.bezier_points[i]
-    bp.co = (px, py, pz)
-    bp.handle_left_type = bp.handle_right_type = 'AUTO'
-curve_data.bevel_depth = 0.055
-curve_data.bevel_resolution = 4
-smile = bpy.data.objects.new("Smile", curve_data)
-bpy.context.collection.objects.link(smile)
-child(smile, (0, -0.62, 2.02))
-smile.rotation_euler = (math.radians(90), 0, 0)
-smile.data.materials.append(DARK)
+mbody = mchild(prim('primitive_uv_sphere_add', radius=0.85, segments=24, ring_count=16), (0, 0, 0.95))
+mbody.scale = (1.0, 0.9, 1.05); mbody.data.materials.append(CREAM)
+mhead = mchild(prim('primitive_uv_sphere_add', radius=0.62, segments=24, ring_count=16), (0, -0.08, 1.78))
+mhead.data.materials.append(CREAM)
+# big glossy eyes (white + pupils)
+muse_eye_whites = []
+for ex in (-0.24, 0.24):
+    ew = mchild(prim('primitive_uv_sphere_add', radius=0.155, segments=14, ring_count=10), (ex, -0.6, 1.9))
+    ew.data.materials.append(WHITE); muse_eye_whites.append(ew)
+    ep = mchild(prim('primitive_uv_sphere_add', radius=0.075, segments=10, ring_count=8), (ex, -0.72, 1.9))
+    ep.data.materials.append(DARK)
+    hl = mchild(prim('primitive_uv_sphere_add', radius=0.035, segments=8, ring_count=6), (ex+0.05, -0.78, 1.95))
+    hl.data.materials.append(WHITE)
+# brows
+for bx in (-0.24, 0.24):
+    br = mchild(prim('primitive_cube_add', size=1, location=(bx, -0.62, 2.12)), (bx, -0.62, 2.12))
+    br.scale = (0.16, 0.03, 0.045); br.rotation_euler = (0, 0, -0.15 if bx < 0 else 0.15)
+    br.data.materials.append(DARK)
+# mouth (lip-sync): dark cavity scaled by envelope
+mmouth = mchild(prim('primitive_uv_sphere_add', radius=0.13, segments=12, ring_count=10), (0, -0.66, 1.58))
+mmouth.scale = (1.25, 0.45, 0.55); mmouth.data.materials.append(MOUTH_M)
 # blush
-for bx in (-0.52, 0.52):
-    bl = child(prim('primitive_uv_sphere_add', radius=0.1, segments=10, ring_count=8),
-               (bx, -0.5, 2.12))
+for bx in (-0.44, 0.44):
+    bl = mchild(prim('primitive_uv_sphere_add', radius=0.09, segments=10, ring_count=8), (bx, -0.55, 1.64))
     bl.scale = (1, 0.4, 0.7); bl.data.materials.append(PINK)
-# arms (holding pose)
-for ax in (-0.95, 0.95):
-    arm = child(prim('primitive_uv_sphere_add', radius=0.3, segments=12, ring_count=10),
-                (ax, -0.35, 1.45))
-    arm.scale = (0.7, 0.9, 1.3); arm.data.materials.append(CREAM)
+# typing arms: pivot empties at shoulders
+marmL_piv = bpy.data.objects.new("MuseArmL", None); bpy.context.collection.objects.link(marmL_piv)
+marmL_piv.parent = muse; marmL_piv.location = (-0.62, -0.35, 1.05)
+marmR_piv = bpy.data.objects.new("MuseArmR", None); bpy.context.collection.objects.link(marmR_piv)
+marmR_piv.parent = muse; marmR_piv.location = (0.62, -0.35, 1.05)
+for piv, sx in ((marmL_piv, -1), (marmR_piv, 1)):
+    arm = prim('primitive_uv_sphere_add', radius=0.22, segments=12, ring_count=10)
+    arm.parent = piv; arm.location = (sx * 0.1, -0.25, -0.15)
+    arm.scale = (0.8, 1.0, 1.5); arm.data.materials.append(CREAM)
+    hand = prim('primitive_uv_sphere_add', radius=0.14, segments=10, ring_count=8)
+    hand.parent = piv; hand.location = (sx * 0.12, -0.42, -0.42)
+    hand.data.materials.append(CREAM)
 # feet
-for fx in (-0.45, 0.45):
-    ft = child(prim('primitive_uv_sphere_add', radius=0.28, segments=12, ring_count=10),
-               (fx, 0.1, 0.28))
-    ft.scale = (1, 1.3, 0.6); ft.data.materials.append(CREAM)
-# ORB (chest level, like holding it)
-orb = child(prim('primitive_ico_sphere_add', radius=0.28, subdivisions=3),
-            (0, -0.8, 1.35))
+for fx in (-0.35, 0.35):
+    ft = mchild(prim('primitive_uv_sphere_add', radius=0.24, segments=12, ring_count=10), (fx, 0.05, 0.16))
+    ft.scale = (1, 1.3, 0.55); ft.data.materials.append(CREAM)
+# orb beside (not blocking face)
+orb = mchild(prim('primitive_ico_sphere_add', radius=0.26, subdivisions=3), (0.95, -0.25, 0.45))
 orb.data.materials.append(ORB_MAT)
 orb_light = bpy.data.lights.new("OrbLight", 'POINT')
-orb_light.energy = 35; orb_light.color = (0.6, 0.45, 1.0)
-orb_light.use_shadow = False
+orb_light.energy = 30; orb_light.color = (0.6, 0.45, 1.0); orb_light.use_shadow = False
 orb_light_obj = bpy.data.objects.new("OrbLightObj", orb_light)
 bpy.context.collection.objects.link(orb_light_obj)
-orb_light_obj.parent = rig; orb_light_obj.location = (0, -0.8, 1.35)
+orb_light_obj.parent = muse; orb_light_obj.location = (0.95, -0.25, 0.6)
 
-MUSE_HOME = (0.9, -0.1, 1.02)
-rig.location = (MUSE_HOME[0], MUSE_HOME[1], -3.0)  # hidden below, rises in sc1
+MUSE_HOME = (0.2, 1.15, DESK_Z)
+muse.location = MUSE_HOME
 
-# ---------- HUMAN (stylized) ----------
-hum = bpy.data.objects.new("Human", None)
+# ================= HUMAN (proper, faces +Y) =================
+hum = bpy.data.objects.new("HumanRig", None)
 bpy.context.collection.objects.link(hum)
 def hchild(o, loc):
     o.parent = hum; o.location = loc; return o
-torso = hchild(prim('primitive_cylinder_add', radius=0.55, depth=1.7, vertices=16), (0, 0, 1.0))
-torso.data.materials.append(HOODIE)
-hhead = hchild(prim('primitive_uv_sphere_add', radius=0.42, segments=20, ring_count=14), (0, 0, 2.2))
+
+torso = hchild(prim('primitive_cylinder_add', radius=0.5, depth=1.35, vertices=18), (0, 0, 1.35))
+torso.data.materials.append(SHIRT)
+# shoulders
+for sx in (-0.52, 0.52):
+    sh = hchild(prim('primitive_uv_sphere_add', radius=0.2, segments=12, ring_count=10), (sx, 0, 1.9))
+    sh.data.materials.append(SHIRT)
+# arms: upper down, forearm forward onto desk (static, relaxed)
+for sx in (-0.55, 0.55):
+    up = hchild(prim('primitive_cylinder_add', radius=0.13, depth=0.75, vertices=12), (sx, 0, 1.5))
+    up.data.materials.append(SHIRT)
+    fo = hchild(prim('primitive_cylinder_add', radius=0.11, depth=0.7, vertices=12), (sx*0.9, 0.42, 1.15))
+    fo.rotation_euler = (math.radians(80), 0, 0); fo.data.materials.append(SKIN)
+    ha = hchild(prim('primitive_uv_sphere_add', radius=0.13, segments=10, ring_count=8), (sx*0.9, 0.72, 1.02))
+    ha.data.materials.append(SKIN)
+# right forearm pivot for gesture (scene 7)
+# (gesture done via whole-torso lean instead - simpler & smooth)
+neck = hchild(prim('primitive_cylinder_add', radius=0.15, depth=0.35, vertices=12), (0, 0, 2.12))
+neck.data.materials.append(SKIN)
+# head group (for nods)
+headG = bpy.data.objects.new("HeadG", None); bpy.context.collection.objects.link(headG)
+headG.parent = hum; headG.location = (0, 0, 2.18)
+def hdchild(o, loc):
+    o.parent = headG; o.location = loc; return o
+hhead = hdchild(prim('primitive_uv_sphere_add', radius=0.45, segments=22, ring_count=16), (0, 0, 0.32))
 hhead.data.materials.append(SKIN)
-hair = hchild(prim('primitive_uv_sphere_add', radius=0.44, segments=20, ring_count=14), (0, 0.12, 2.4))
-hair.scale = (1, 1, 0.68); hair.data.materials.append(HAIR_MAT)
-for ex in (-0.16, 0.16):
-    he = hchild(prim('primitive_uv_sphere_add', radius=0.06, segments=10, ring_count=8),
-                (ex, -0.38, 2.18))
-    he.data.materials.append(DARK)
-for gx in (-0.16, 0.16):
-    gl = hchild(prim('primitive_torus_add', major_radius=0.13, minor_radius=0.025,
-                     major_segments=12, minor_segments=8), (gx, -0.4, 2.18))
-    gl.data.materials.append(DARK)
-hum.location = (-2.9, -0.2, 0.35)
-hum.rotation_euler = (0, 0, math.radians(-18))
-
-# ---------- ENVIRONMENT ----------
-floor = prim('primitive_plane_add', size=30, location=(0, 0, 0))
-floor.data.materials.append(WOOD)
-wall = prim('primitive_plane_add', size=30, location=(0, 7, 8))
-wall.rotation_euler = (math.radians(90), 0, 0)
-wall.data.materials.append(WALL_MAT)
-# desk
-desk = prim('primitive_cube_add', size=1, location=(0.3, 0, DESK_Z - 0.12))
-desk.scale = (4.2, 1.7, 0.24); desk.data.materials.append(WOOD)
-for lx, ly in [(-3.4, -1.3), (3.9, -1.3), (-3.4, 1.3), (3.9, 1.3)]:
-    leg = prim('primitive_cylinder_add', radius=0.09, depth=DESK_Z - 0.2, vertices=10,
-               location=(lx, ly, (DESK_Z - 0.2) / 2))
+for ex in (-0.17, 0.17):  # eyes: white + pupils
+    ew = hdchild(prim('primitive_uv_sphere_add', radius=0.105, segments=12, ring_count=10), (ex, 0.38, 0.4))
+    ew.data.materials.append(WHITE)
+    ep = hdchild(prim('primitive_uv_sphere_add', radius=0.05, segments=8, ring_count=6), (ex, 0.46, 0.4))
+    ep.data.materials.append(DARK)
+human_eye_whites = [o for o in headG.children if o.data and any(m.name == "White" for m in o.data.materials)]
+# brows
+for bx in (-0.17, 0.17):
+    br = hdchild(prim('primitive_cube_add', size=1), (bx, 0.4, 0.6))
+    br.scale = (0.18, 0.035, 0.05); br.rotation_euler = (0, 0, 0.12 if bx < 0 else -0.12)
+    br.data.materials.append(HAIR_MAT)
+nose = hdchild(prim('primitive_uv_sphere_add', radius=0.06, segments=8, ring_count=6), (0, 0.44, 0.3))
+nose.data.materials.append(SKIN)
+# mouth (lip-sync)
+hmouth = hdchild(prim('primitive_uv_sphere_add', radius=0.1, segments=12, ring_count=10), (0, 0.4, 0.12))
+hmouth.scale = (1.5, 0.45, 0.6); hmouth.data.materials.append(MOUTH_M)
+for ex in (-0.44, 0.44):  # ears
+    ea = hdchild(prim('primitive_uv_sphere_add', radius=0.09, segments=8, ring_count=6), (ex, 0, 0.32))
+    ea.data.materials.append(SKIN)
+hair = hdchild(prim('primitive_uv_sphere_add', radius=0.48, segments=20, ring_count=14), (0, -0.07, 0.44))
+hair.scale = (1, 1, 0.72); hair.data.materials.append(HAIR_MAT)
+# legs (thighs forward, shins down)
+for sx in (-0.22, 0.22):
+    th = hchild(prim('primitive_cylinder_add', radius=0.16, depth=0.8, vertices=12), (sx, 0.35, 0.62))
+    th.rotation_euler = (math.radians(90), 0, 0); th.data.materials.append(PANTS)
+    sh2 = hchild(prim('primitive_cylinder_add', radius=0.13, depth=0.65, vertices=12), (sx, 0.68, 0.32))
+    sh2.data.materials.append(PANTS)
+HUM_HOME = (0.2, -2.1, 0.0)
+hum.location = HUM_HOME
+# chair
+chair = prim('primitive_cube_add', size=1, location=(0.2, -2.15, 0.45))
+chair.scale = (0.65, 0.6, 0.12); chair.data.materials.append(WOOD)
+chback = prim('primitive_cube_add', size=1, location=(0.2, -2.62, 1.0))
+chback.scale = (0.65, 0.1, 0.9); chback.data.materials.append(WOOD)
+for lx, lz in [(-0.25, -2.4), (0.65, -2.4), (-0.25, -1.9), (0.65, -1.9)]:
+    leg = prim('primitive_cylinder_add', radius=0.05, depth=0.45, vertices=8, location=(lx, lz, 0.22))
     leg.data.materials.append(WOOD)
-# laptop
-lap_base = prim('primitive_cube_add', size=1, location=(-0.7, -0.35, DESK_Z + 0.03))
-lap_base.scale = (0.85, 0.6, 0.06); lap_base.data.materials.append(DARK)
-lap_scr = prim('primitive_cube_add', size=1, location=(-0.7, 0.12, DESK_Z + 0.42))
-lap_scr.scale = (0.85, 0.05, 0.62); lap_scr.rotation_euler = (math.radians(-12), 0, 0)
+
+# ================= ENVIRONMENT =================
+floor = prim('primitive_plane_add', size=34, location=(0, 0, 0)); floor.data.materials.append(WOOD)
+wall = prim('primitive_plane_add', size=34, location=(0, 7.5, 9))
+wall.rotation_euler = (math.radians(90), 0, 0); wall.data.materials.append(WALL_MAT)
+# desk
+desk = prim('primitive_cube_add', size=1, location=(0.2, 0, DESK_Z - 0.11))
+desk.scale = (2.6, 1.15, 0.22); desk.data.materials.append(WOOD)
+for lx, ly in [(-2.0, -0.9), (2.4, -0.9), (-2.0, 0.9), (2.4, 0.9)]:
+    leg = prim('primitive_cylinder_add', radius=0.08, depth=DESK_Z - 0.2, vertices=10,
+               location=(lx, ly, (DESK_Z - 0.2) / 2)); leg.data.materials.append(WOOD)
+# laptop (proper)
+lap_base = prim('primitive_cube_add', size=1, location=(0.2, 0.1, DESK_Z + 0.035))
+lap_base.scale = (0.95, 0.65, 0.07); lap_base.data.materials.append(DARK)
+# keyboard: inset lighter panel + key rows
+kb = prim('primitive_cube_add', size=1, location=(0.2, 0.08, DESK_Z + 0.075))
+kb.scale = (0.85, 0.4, 0.012); kb.data.materials.append(mat("Keys", (0.16, 0.17, 0.2), 0.7))
+lap_scr = prim('primitive_cube_add', size=1, location=(0.2, 0.42, DESK_Z + 0.42))
+lap_scr.scale = (0.95, 0.05, 0.62); lap_scr.rotation_euler = (math.radians(-14), 0, 0)
 lap_scr.data.materials.append(DARK)
-scr_face = prim('primitive_plane_add', size=1, location=(-0.7, 0.085, DESK_Z + 0.42))
-scr_face.scale = (0.78, 0.55, 1); scr_face.rotation_euler = (math.radians(78), 0, 0)
+scr_face = prim('primitive_plane_add', size=1, location=(0.2, 0.385, DESK_Z + 0.42))
+scr_face.scale = (0.88, 0.55, 1); scr_face.rotation_euler = (math.radians(76), 0, 0)
 scr_face.data.materials.append(SCREEN_MAT)
-# code lines on screen (thin emissive boxes)
-for i in range(8):
-    cl = prim('primitive_cube_add', size=1,
-              location=(-0.95 + (i % 3) * 0.12, 0.07, DESK_Z + 0.28 + i * 0.055))
-    cl.scale = (0.28 - (i % 3) * 0.06, 0.012, 0.02)
-    cl.rotation_euler = (math.radians(78), 0, 0)
-    cl.data.materials.append(mat(f"Code{i}", (0.2, 0.6, 1.0), 0.4,
-                                 emission=(0.25, 0.65, 1.0), e_strength=2.0))
-# window + stars
-win_frame = prim('primitive_cube_add', size=1, location=(4.6, 6.8, 4.6))
-win_frame.scale = (1.6, 0.15, 2.2); win_frame.data.materials.append(DARK)
-win_glass = prim('primitive_plane_add', size=1, location=(4.6, 6.72, 4.6))
-win_glass.scale = (2.8, 3.8, 1); win_glass.rotation_euler = (math.radians(90), 0, 0)
-win_glass.data.materials.append(NIGHT_MAT)
-import random
-random.seed(7)
-for _ in range(24):
-    st = prim('primitive_uv_sphere_add', radius=0.05, segments=6, ring_count=4,
-              location=(4.6 + random.uniform(-1.3, 1.3), 6.68,
-                        4.6 + random.uniform(-1.8, 1.8)))
-    st.data.materials.append(mat("Star", (1, 1, 1), 0.5, emission=(1, 1, 1), e_strength=2.5))
+for i in range(9):  # code lines
+    cl = prim('primitive_cube_add', size=1, location=(-0.12 + (i % 3) * 0.14, 0.365, DESK_Z + 0.24 + i * 0.052))
+    cl.scale = (0.3 - (i % 3) * 0.07, 0.012, 0.02); cl.rotation_euler = (math.radians(76), 0, 0)
+    cl.data.materials.append(mat(f"Code{i}", (0.2, 0.6, 1.0), 0.4, emission=(0.3, 0.7, 1.0), e_strength=2.2))
+# screen glow
+scr_light = bpy.data.lights.new("ScrLight", 'POINT')
+scr_light.energy = 25; scr_light.color = (0.4, 0.6, 1.0); scr_light.use_shadow = False
+scr_light_obj = bpy.data.objects.new("ScrLightObj", scr_light)
+bpy.context.collection.objects.link(scr_light_obj)
+scr_light_obj.location = (0.2, -0.1, DESK_Z + 0.5)
+# mug
+mug = prim('primitive_cylinder_add', radius=0.14, depth=0.3, vertices=14, location=(-1.6, -0.5, DESK_Z + 0.15))
+mug.data.materials.append(MUG_M)
 # lamp
-lamp_base = prim('primitive_cylinder_add', radius=0.3, depth=0.08, vertices=16,
-                 location=(3.1, 0.9, DESK_Z + 0.04))
+lamp_base = prim('primitive_cylinder_add', radius=0.28, depth=0.08, vertices=14, location=(2.3, 0.7, DESK_Z + 0.04))
 lamp_base.data.materials.append(DARK)
-lamp_arm = prim('primitive_cylinder_add', radius=0.05, depth=1.6, vertices=10,
-                location=(3.1, 0.9, DESK_Z + 0.8))
+lamp_arm = prim('primitive_cylinder_add', radius=0.045, depth=1.5, vertices=8, location=(2.3, 0.7, DESK_Z + 0.75))
 lamp_arm.data.materials.append(DARK)
-bpy.ops.mesh.primitive_cone_add(radius1=0.45, depth=0.5, vertices=16,
-                                location=(3.1, 0.9, DESK_Z + 1.7))
+bpy.ops.mesh.primitive_cone_add(radius1=0.42, depth=0.5, vertices=14, location=(2.3, 0.35, DESK_Z + 1.55))
 shade = bpy.context.active_object; shade.data.materials.append(DARK)
+shade.rotation_euler = (math.radians(35), 0, 0)
 lamp_light = bpy.data.lights.new("LampLight", 'POINT')
-lamp_light.energy = 0; lamp_light.color = (1.0, 0.75, 0.45)
-lamp_light.use_shadow = False
+lamp_light.energy = 700; lamp_light.color = (1.0, 0.78, 0.5); lamp_light.use_shadow = False
 lamp_obj = bpy.data.objects.new("LampObj", lamp_light)
-bpy.context.collection.objects.link(lamp_obj)
-lamp_obj.location = (3.1, 0.9, DESK_Z + 1.55)
+bpy.context.collection.objects.link(lamp_obj); lamp_obj.location = (2.3, 0.35, DESK_Z + 1.4)
+# window + stars
+win_frame = prim('primitive_cube_add', size=1, location=(-3.2, 7.3, 4.8))
+win_frame.scale = (1.7, 0.15, 2.3); win_frame.data.materials.append(DARK)
+win_glass = prim('primitive_plane_add', size=1, location=(-3.2, 7.22, 4.8))
+win_glass.scale = (3.0, 4.0, 1); win_glass.rotation_euler = (math.radians(90), 0, 0)
+win_glass.data.materials.append(NIGHT_MAT)
+for _ in range(26):
+    st = prim('primitive_uv_sphere_add', radius=0.05, segments=6, ring_count=4,
+              location=(-3.2 + random.uniform(-1.4, 1.4), 7.18, 4.8 + random.uniform(-1.9, 1.9)))
+    st.data.materials.append(mat("Star", (1, 1, 1), 0.5, emission=(1, 1, 1), e_strength=2.5))
 # papers
-for i, px in enumerate([-2.2, -1.7]):
-    pp = prim('primitive_cube_add', size=1, location=(px, 0.6 + i * 0.25, DESK_Z + 0.02))
-    pp.scale = (0.5, 0.35, 0.015); pp.rotation_euler = (0, 0, 0.2 * i)
-    pp.data.materials.append(PAPER)
-
-# ---------- lights ----------
-bpy.ops.object.light_add(type='SUN', location=(5, -6, 8))
-sun = bpy.context.active_object; sun.data.energy = 0.5
+for i, px in enumerate([-1.1, -0.6]):
+    pp = prim('primitive_cube_add', size=1, location=(px, -0.55 + i * 0.2, DESK_Z + 0.02))
+    pp.scale = (0.5, 0.35, 0.015); pp.rotation_euler = (0, 0, 0.25 * i); pp.data.materials.append(PAPER)
+# lights
+bpy.ops.object.light_add(type='SUN', location=(5, -6, 9))
+sun = bpy.context.active_object; sun.data.energy = 0.45
 sun.rotation_euler = (math.radians(60), 0, math.radians(30))
-bpy.ops.object.light_add(type='POINT', location=(-4, -4, 4))
+bpy.ops.object.light_add(type='POINT', location=(-4, -5, 4.5))
 fill = bpy.context.active_object
-fill.data.energy = 120; fill.data.color = (0.35, 0.5, 0.9)
-fill.data.use_shadow = False
+fill.data.energy = 90; fill.data.color = (0.35, 0.5, 0.9); fill.data.use_shadow = False
 
-# ---------- camera + focus ----------
-bpy.ops.object.camera_add(location=(0.9, -3.2, 2.1))
+# ================= CAMERA =================
+bpy.ops.object.camera_add(location=(-4.5, -1.5, 2.6))
 cam = bpy.context.active_object
 bpy.context.scene.camera = cam
-cam.data.lens = 40
+cam.data.lens = 42
 focus = bpy.data.objects.new("Focus", None)
 bpy.context.collection.objects.link(focus)
 trk = cam.constraints.new('TRACK_TO')
@@ -247,100 +273,98 @@ trk.target = focus; trk.track_axis = 'TRACK_NEGATIVE_Z'; trk.up_axis = 'UP_Y'
 def ck(frame, cam_loc, focus_loc):
     key(cam, frame, loc=cam_loc); key(focus, frame, loc=focus_loc)
 
-def s2f(sec):
-    return int(round(sec * FPS))
-
-ORB_POS = (0.9, -0.95, 1.0)
-# shot keyframes from scenes
 for sc in SCENES:
     f0, f1, shot = s2f(sc["start"]), s2f(sc["end"]), sc["shot"]
-    if shot == "orb":
-        ck(f0, (1.5, -4.0, 1.7), (0.9, -0.9, 0.9))
-        ck(f1, (1.3, -3.4, 1.6), (0.9, -0.9, 0.9))  # slow push-in on glowing orb
-    elif shot == "wide":
-        ck(f0, (0.2, -6.8, 3.4), (0.2, 0.2, 1.4))
-        ck(f1, (0.2, -6.8, 3.4), (0.2, 0.2, 1.4))
+    if shot == "two":
+        ck(f0, (-6.2, -1.0, 3.6), (0.3, -0.5, 1.6))
+        ck(f1, (-5.8, -0.8, 3.5), (0.3, -0.5, 1.6))
+    elif shot == "muse":
+        ck(f0, (2.7, -2.9, 2.65), (0.2, 1.0, 1.9))
+        ck(f1, (2.5, -2.7, 2.6), (0.2, 1.0, 1.9))
     elif shot == "human":
-        ck(f0, (-2.9, -3.2, 2.3), (-2.9, 0, 1.9))
-        ck(f1, (-2.9, -3.2, 2.3), (-2.9, 0, 1.9))
-    elif shot == "montage":
-        cx, cy, r = 0.9, -0.1, 6.0
-        for k in range(5):
-            a = k / 4 * math.pi * 1.2
-            ff = f0 + int((f1 - f0) * k / 4)
-            ck(ff, (cx + r * math.sin(a + 2.2), cy - r * math.cos(a + 2.2), 3.2),
-               (0.9, -0.1, 1.7))
-    elif shot == "hero":
-        ck(f0, (0.9, -4.8, 1.5), (0.9, 0.1, 2.1))
-        ck(f1, (0.9, -4.3, 1.6), (0.9, 0.1, 2.1))
+        ck(f0, (2.7, -1.1, 2.9), (0.2, -2.0, 2.2))
+        ck(f1, (2.5, -1.0, 2.85), (0.2, -2.0, 2.2))
+    elif shot == "over":
+        ck(f0, (1.7, -3.6, 2.9), (0.2, 0.7, 1.6))
+        ck(f1, (1.5, -3.3, 2.8), (0.2, 0.7, 1.6))
 
-# ---------- muse animation ----------
-# scene 1 (orb): rise from darkness fast, orb glowing (visible most of scene)
-sc1 = SCENES[0]
-key(rig, 0, loc=(MUSE_HOME[0], MUSE_HOME[1], -3.0))
-key(rig, s2f(sc1["start"]) + 25, loc=(MUSE_HOME[0], MUSE_HOME[1], -0.55))
-key(rig, s2f(sc1["end"]) - 6, loc=(MUSE_HOME[0], MUSE_HOME[1], -0.55))
-# scene 2 (wide): jump onto desk with squash & stretch
-sc2 = SCENES[1]
-j0, j1 = s2f(sc2["start"]), s2f(sc2["start"]) + 24
-key(rig, j0, loc=(MUSE_HOME[0], MUSE_HOME[1], -0.55))
-key(rig, j0 + 12, loc=(MUSE_HOME[0], MUSE_HOME[1], 3.4),
-    scale=(0.85, 0.85, 1.2))                       # stretch up
-key(rig, j1, loc=MUSE_HOME, scale=(1.25, 1.25, 0.72))  # squash on land
-key(rig, j1 + 10, scale=(1, 1, 1))
-rig.location = MUSE_HOME
-# hold home afterwards
-key(rig, NFRAMES - 1, loc=MUSE_HOME)
+# ================= ANIMATION =================
+# speaker per frame
+def speaker_at(f):
+    sec = f / FPS
+    for sc in SCENES:
+        if sc["start"] <= sec < sc["end"]:
+            return sc["speaker"]
+    return None
 
-# montage spin (scene 4)
-sc4 = SCENES[3]
-m0, m1 = s2f(sc4["start"]), s2f(sc4["end"])
-key(rig, m0, rot=(0, 0, 0))
-key(rig, m1, rot=(0, 0, math.pi * 4))
-# hero happy hop (scene 6)
-sc6 = SCENES[5]
-h0 = s2f(sc6["start"])
-key(rig, h0 + 6, loc=(MUSE_HOME[0], MUSE_HOME[1], MUSE_HOME[2] + 0.9))
-key(rig, h0 + 16, loc=MUSE_HOME, scale=(1.2, 1.2, 0.75))
-key(rig, h0 + 26, scale=(1, 1, 1))
-
-# orb orbit during montage (local coords circle around muse)
-for k in range(9):
-    ff = m0 + int((m1 - m0) * k / 8)
-    a = k / 8 * math.pi * 2
-    key(orb, ff, loc=(1.3 * math.cos(a), -0.1 + 1.3 * math.sin(a),
-                      1.7 + 0.5 * math.sin(a * 2)))
-key(orb, NFRAMES - 1, loc=(0, -0.8, 1.35))  # back to hands
-# orb light pulse
-for f in range(0, NFRAMES, 12):
-    e = 35 + 30 * (0.5 + 0.5 * math.sin(f * 0.11))
-    orb_light.energy = e
-    orb_light.keyframe_insert("energy", frame=f)
-
-# lamp reveal: dark in sc1, on from sc2
-lamp_light.energy = 0; lamp_light.keyframe_insert("energy", frame=0)
-f_lamp = s2f(SCENES[1]["start"]) + 8
-lamp_light.energy = 900; lamp_light.keyframe_insert("energy", frame=f_lamp)
-
-# smile talking: scale Y from envelope (every 2nd frame)
+# mouths: lip-sync gated by speaker (every 2nd frame)
 for f in range(0, NFRAMES, 2):
     v = ENV[f] if f < len(ENV) else 0
-    smile.scale = (1, 0.35 + v * 1.1, 1)
-    smile.keyframe_insert("scale", frame=f)
-# blink every ~3.5s
-for b in range(0, NFRAMES, 105):
-    for e in (eyeL, eyeR):
-        key(e, b, scale=(1, 1, 1))
-        key(e, b + 4, scale=(1, 1, 0.08))
-        key(e, b + 8, scale=(1, 1, 1))
+    spk = speaker_at(f)
+    my = 0.45 + (v * 1.3 if spk == "muse" else 0)
+    mmouth.scale = (1.25, my, 0.55); mmouth.keyframe_insert("scale", frame=f)
+    hy = 0.45 + (v * 1.4 if spk == "human" else 0)
+    hmouth.scale = (1.5, hy, 0.6); hmouth.keyframe_insert("scale", frame=f)
+
+# Muse typing: arms alternate + body bob during MUSE scenes
+for sc in SCENES:
+    if sc["speaker"] != "muse":
+        continue
+    f0, f1 = s2f(sc["start"]), s2f(sc["end"])
+    for f in range(f0, f1, 6):
+        ph = (f - f0) / 6
+        aL = math.sin(ph * math.pi) * 0.35
+        aR = math.sin(ph * math.pi + math.pi) * 0.35
+        marmL_piv.rotation_euler = (aL, 0, 0); marmL_piv.keyframe_insert("rotation_euler", frame=f)
+        marmR_piv.rotation_euler = (aR, 0, 0); marmR_piv.keyframe_insert("rotation_euler", frame=f)
+        bob = abs(math.sin(ph * math.pi)) * 0.06
+        muse.location = (MUSE_HOME[0], MUSE_HOME[1], MUSE_HOME[2] + bob)
+        muse.keyframe_insert("location", frame=f)
+key(muse, NFRAMES - 1, loc=MUSE_HOME)
+marmL_piv.rotation_euler = (0, 0, 0); marmL_piv.keyframe_insert("rotation_euler", frame=NFRAMES - 1)
+marmR_piv.rotation_euler = (0, 0, 0); marmR_piv.keyframe_insert("rotation_euler", frame=NFRAMES - 1)
+
+# Muse looks up at human on line 8 (scene idx 7)
+sc8 = SCENES[7]
+key(muse, s2f(sc8["start"]), rot=(0, 0, 0))
+key(muse, s2f(sc8["start"]) + 20, rot=(math.radians(-12), 0, math.radians(18)))
+key(muse, s2f(sc8["end"]), rot=(0, 0, 0))
+
+# Human: nod on line 7 (idx 6), lean-in on line 5 (idx 4), soft tilt line 9 (idx 8)
+sc7, sc5, sc9 = SCENES[6], SCENES[4], SCENES[8]
+f = s2f(sc7["start"])
+key(headG, f, rot=(0, 0, 0)); key(headG, f + 12, rot=(math.radians(14), 0, 0))
+key(headG, f + 24, rot=(0, 0, 0)); key(headG, f + 36, rot=(math.radians(14), 0, 0))
+key(headG, f + 48, rot=(0, 0, 0))
+f = s2f(sc5["start"])
+key(hum, f, loc=HUM_HOME, rot=(0, 0, 0))
+key(hum, f + 18, loc=(HUM_HOME[0], HUM_HOME[1] + 0.35, HUM_HOME[2]), rot=(math.radians(-8), 0, 0))
+key(hum, s2f(sc5["end"]), loc=HUM_HOME, rot=(0, 0, 0))
+f = s2f(sc9["start"])
+key(headG, f, rot=(0, 0, 0)); key(headG, f + 20, rot=(0, 0, math.radians(10)))
+key(headG, s2f(sc9["end"]), rot=(0, 0, 0))
+
+# blinking (eye whites only)
+blink_targets = list(muse_eye_whites) + list(human_eye_whites)
+for b in range(40, NFRAMES, 110):
+    for e in blink_targets:
+        sx, sy, sz = e.scale.x, e.scale.y, e.scale.z
+        key(e, b, scale=(sx, sy, sz))
+        key(e, b + 4, scale=(sx, sy, 0.12))
+        key(e, b + 8, scale=(sx, sy, sz))
+
+# orb gentle pulse
+for f in range(0, NFRAMES, 15):
+    orb_light.energy = 30 + 14 * (0.5 + 0.5 * math.sin(f * 0.09))
+    orb_light.keyframe_insert("energy", frame=f)
 
 bpy.context.view_layer.update()
 
-# ---------- render ----------
+# ================= RENDER =================
 scene = bpy.context.scene
 scene.render.engine = 'CYCLES'
 scene.cycles.device = 'CPU'
-scene.cycles.samples = 16
+scene.cycles.samples = 20
 scene.cycles.use_denoising = True
 scene.cycles.max_bounces = 4
 scene.cycles.diffuse_bounces = 2
@@ -360,26 +384,24 @@ scene.render.image_settings.file_format = 'PNG'
 scene.render.filepath = FRAMES_DIR + "/f"
 scene.frame_start, scene.frame_end = 0, NFRAMES - 1
 
-print("SCENE READY, frames:", NFRAMES)
+print("SCENE READY, frames:", NFRAMES, flush=True)
 import time
 t0 = time.time()
 if os.environ.get("SAVE_BLEND"):
     out = os.environ.get("BLEND_OUT") or os.path.join(os.getcwd(), "muse_scene.blend")
     out = os.path.abspath(out)
-    print("Saving blend to:", out, "cwd:", os.getcwd(), flush=True)
+    print("Saving blend to:", out, flush=True)
     bpy.ops.wm.save_as_mainfile(filepath=out)
     if not os.path.exists(out):
-        raise RuntimeError(f"Blend save FAILED, not found at {out}")
-    print("BLEND SAVED:", out, f"({os.path.getsize(out)//1024} KB)")
+        raise RuntimeError(f"Blend save FAILED at {out}")
+    print("BLEND SAVED:", out, flush=True)
 elif os.environ.get("TEST_FRAMES"):
-    # smoke test: render 3 scattered frames only
-    for tf in [5, NFRAMES // 2, NFRAMES - 10]:
+    for tf in [10, 103, 239, 793]:
         scene.frame_set(tf)
         scene.render.filepath = FRAMES_DIR + f"/test_f{tf}"
         bpy.ops.render.render(write_still=True)
     print("SMOKE TEST DONE in", round(time.time() - t0, 1), "s")
 else:
-    # resumable per-frame loop (survives VM restarts)
     for f in range(NFRAMES):
         fp = f"{FRAMES_DIR}/f{f:04d}.png"
         if os.path.exists(fp):
@@ -387,6 +409,6 @@ else:
         scene.frame_set(f)
         scene.render.filepath = fp
         bpy.ops.render.render(write_still=True)
-        if f % 30 == 0:
+        if f % 60 == 0:
             print(f"rendered {f}/{NFRAMES}", flush=True)
     print("FULL RENDER DONE in", round(time.time() - t0, 1), "s")
