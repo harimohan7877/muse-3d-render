@@ -1,0 +1,54 @@
+{
+ "scenes": [
+  {
+   "start": 0.0,
+   "end": 3.4,
+   "speaker": "MUSE",
+   "text": "Andhera... sirf tab tak, jab tak main na aau!",
+   "shot": "orb",
+   "dur": 3.4
+  },
+  {
+   "start": 3.75,
+   "end": 7.85,
+   "speaker": "MUSE",
+   "text": "61 baar 'no' suna hai... 62vi baar 'yes' sunna hai!",
+   "shot": "wide",
+   "dur": 4.1
+  },
+  {
+   "start": 8.2,
+   "end": 9.33,
+   "speaker": "HUMAN",
+   "text": "To karke dikha!",
+   "shot": "human",
+   "dur": 1.13
+  },
+  {
+   "start": 9.68,
+   "end": 12.38,
+   "speaker": "MUSE",
+   "text": "Dekh! Design... Code... Deploy!",
+   "shot": "montage",
+   "dur": 2.7
+  },
+  {
+   "start": 12.73,
+   "end": 13.95,
+   "speaker": "HUMAN",
+   "text": "Footer check karun?",
+   "shot": "human",
+   "dur": 1.22
+  },
+  {
+   "start": 14.3,
+   "end": 17.0,
+   "speaker": "MUSE",
+   "text": "Kar le. Aaj 2 pixels bhi off nahi!",
+   "shot": "hero",
+   "dur": 2.7
+  }
+ ],
+ "total": 17.0,
+ "fps": 30
+}
