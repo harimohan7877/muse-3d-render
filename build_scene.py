@@ -255,8 +255,8 @@ ORB_POS = (0.9, -0.95, 1.0)
 for sc in SCENES:
     f0, f1, shot = s2f(sc["start"]), s2f(sc["end"]), sc["shot"]
     if shot == "orb":
-        ck(f0, (0.9, -2.7, 1.7), ORB_POS)
-        ck(f1, (0.9, -2.25, 1.6), ORB_POS)  # slow push-in
+        ck(f0, (1.5, -4.0, 1.7), (0.9, -0.9, 0.9))
+        ck(f1, (1.3, -3.4, 1.6), (0.9, -0.9, 0.9))  # slow push-in on glowing orb
     elif shot == "wide":
         ck(f0, (0.2, -6.8, 3.4), (0.2, 0.2, 1.4))
         ck(f1, (0.2, -6.8, 3.4), (0.2, 0.2, 1.4))
@@ -264,11 +264,11 @@ for sc in SCENES:
         ck(f0, (-2.9, -3.2, 2.3), (-2.9, 0, 1.9))
         ck(f1, (-2.9, -3.2, 2.3), (-2.9, 0, 1.9))
     elif shot == "montage":
-        cx, cy, r = 0.9, -0.1, 4.2
+        cx, cy, r = 0.9, -0.1, 6.0
         for k in range(5):
-            a = k / 4 * math.pi * 1.5
+            a = k / 4 * math.pi * 1.2
             ff = f0 + int((f1 - f0) * k / 4)
-            ck(ff, (cx + r * math.sin(a + 2.6), cy - r * math.cos(a + 2.6), 2.4),
+            ck(ff, (cx + r * math.sin(a + 2.2), cy - r * math.cos(a + 2.2), 3.2),
                (0.9, -0.1, 1.7))
     elif shot == "hero":
         ck(f0, (0.9, -4.8, 1.5), (0.9, 0.1, 2.1))
