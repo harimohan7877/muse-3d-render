@@ -46,7 +46,7 @@ jobs:
           tar -xf blender.tar.xz
       - name: Render chunk
         run: |
-          ./blender-5.2.2-linux-x64/blender -b --python render_chunk.py -- $(( ${{ matrix.chunk }} * 51 )) $(( ${{ matrix.chunk }} * 51 + 50 ))
+          ./blender-5.2.2-linux-x64/blender -b --python render_chunk.py -- $(( ${{ matrix.chunk }} * 156 )) $(( ${{ matrix.chunk }} * 156 + 155 ))
       - uses: actions/upload-artifact@v4
         with:
           name: frames-${{ matrix.chunk }}
@@ -71,12 +71,12 @@ jobs:
           ffmpeg -y -v error -framerate 30 -i frames_all/f%04d.png \
             -vf "scale=1080:1920:flags=lanczos" \
             -c:v libx264 -pix_fmt yuv420p -preset medium -movflags +faststart \
-            demo_reel_v3_silent.mp4
-          ls -la demo_reel_v3_silent.mp4
+            demo_reel_v5_silent.mp4
+          ls -la demo_reel_v5_silent.mp4
       - name: Commit video
         run: |
           git config user.name "muse-render"
           git config user.email "muse-render@local"
-          git add demo_reel_v3_silent.mp4
-          git commit -m "3D demo render (silent, audio muxed locally)"
+          git add demo_reel_v5_silent.mp4
+          git commit -m "v5 render (silent, audio muxed locally)"
           git push
