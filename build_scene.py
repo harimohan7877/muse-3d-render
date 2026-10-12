@@ -2,7 +2,8 @@
 Reads scenes.json + envelope.json. Renders PNG sequence headless (Cycles CPU)."""
 import bpy, json, math, os
 
-BASE = os.path.expanduser("~/workspace/reel_demo/v3")
+BASE = os.path.dirname(os.path.abspath(__file__))  # script's own dir (works local + CI)
+print("BASE:", BASE, flush=True)
 SC = json.load(open(f"{BASE}/scenes.json"))
 SCENES, TOTAL, FPS = SC["scenes"], SC["total"], SC["fps"]
 ENV = json.load(open(f"{BASE}/envelope.json"))
